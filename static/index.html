@@ -1,0 +1,134 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Payment Gateway</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="payment-form">
+        <h2>Secure Payment</h2>
+        <input id="card-number" type="text" placeholder="Card Number" maxlength="16" oninput="validateCardNumber()">
+        <div id="card-error" class="error"></div>
+        <input id="expiry" type="text" placeholder="MM/YY" maxlength="5">
+        <input id="cvv" type="text" placeholder="CVV" maxlength="3">
+        <input id="amount" type="number" placeholder="Amount" min="1">
+        <button onclick="submitPayment()" id="pay-button">Pay Now</button>
+        <div id="message" class=""></div>
+    </div>
+
+    <script>
+        function validateCardNumber() {
+            const cardNumber = document.getElementById('card-number').value.replace(/\s/g, '');
+            const error = document.getElementById('card-error');
+            if (cardNumber.length === 16 && luhnCheck(cardNumber)) {
+                error.textContent = '';
+                return true;
+            } else {
+                error.textContent = 'Invalid card number';
+                return false;
+            }
+        }
+
+        function luhnCheck(cardNumber) {
+            let sum = 0;
+            let isEven = false;
+            for (let i = cardNumber.length - 1; i >= 0; i--) {
+                let digit = parseInt(cardNumber[i]);
+                if (isEven) {
+                    digit *= 2;
+                    if (digit > 9) digit -= 9;
+                }
+                sum += digit;
+                isEven = !isEven;
+            }
+            return sum % 10 === 0;
+        }
+
+        async function submitPayment() {
+            const cardNumber = document.getElementById('card-number').value;
+            const expiry = document.getElementById('expiry').value;
+            const cvv = document.getElementById('cvv').value;
+            const amount = document.getElementById('amount').value;
+            const message = document.getElementById('message');
+            const button = document.getElementById('pay-button');
+
+            if (!validateCardNumber() || !cardNumber || !expiry || !cvv || !amount) {
+                message.textContent = 'Please fill all fields correctly';
+                message.className = 'error';
+                return;
+            }
+
+            button.disabled = true;
+            try {
+                const response = await fetch('http://localhost:8080/api/payments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        card_number: cardNumber,
+                        expiry: expiry,
+                        cvv: cvv,
+                        amount: parseFloat(amount)
+                    })
+                });
+                const data = await response.json();c
+                message.textContent = data.message;
+                message.className = response.ok ? 'success' : 'error';
+                if (response.ok) {
+                    document.getElementById('card-number').value = '';
+                    document.getElementById('expiry').value = '';
+                    document.getElementById('cvv').value = '';
+                    document.getElementById('amount').value = '';
+                }
+            } catch (error) {
+                message.textContent = 'Payment failed: Network error';
+                message.className = 'error';
+            } finally {
+                button.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
